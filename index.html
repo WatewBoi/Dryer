@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dryer Settings App</title>
+  <style>
+    :root {
+      --panel: #111827;
+      --panel2: #1f2937;
+      --border: #334155;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --danger: #ef4444;
+      --good: #22c55e;
+      --warn: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: linear-gradient(180deg,#020617,#111827); color: var(--text); }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .card { background: rgba(17,24,39,.94); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .mode-box { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .hidden-locked { display: none; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(280px,1fr)); gap: 16px; }
+    h1,h2 { margin: 0 0 12px; }
+    p,.muted { color: var(--muted); }
+    label { display: block; margin: 10px 0 6px; color: #cbd5e1; font-size: 14px; }
+    input, select, button { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: #0b1220; color: var(--text); }
+    input[type=file] { padding: 8px; }
+    button { background: var(--accent); color: #00111a; font-weight: 700; border: none; cursor: pointer; }
+    button.secondary { background: #1e293b; color: var(--text); border: 1px solid var(--border); }
+    button.danger { background: var(--danger); color: white; }
+    .btn-row { display: grid; grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); gap: 10px; margin-top: 12px; }
+    .result { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-top: 12px; }
+    .zone { background: var(--panel2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; text-align: center; }
+    .zone .name { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+    .zone .val { font-size: 28px; font-weight: 800; margin-top: 8px; }
+    .tag { display: inline-block; margin-top: 10px; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .exact { background: rgba(34,197,94,.18); color: #86efac; border: 1px solid rgba(34,197,94,.35); }
+    .estimate { background: rgba(245,158,11,.18); color: #fcd34d; border: 1px solid rgba(245,158,11,.35); }
+    .inline { display: grid; grid-template-columns: 1.3fr .8fr .8fr .8fr .8fr auto; gap: 8px; align-items: center; }
+    .searchbar { display: grid; grid-template-columns: 1fr 170px; gap: 10px; }
+    .table-wrap { border: 1px solid var(--border); border-radius: 12px; overflow: visible; margin-top: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th,td { border-bottom: 1px solid var(--border); padding: 8px; text-align: left; vertical-align: top; }
+    th { position: static; background: #0f172a; }
+    tbody tr:nth-child(even) { background: rgba(148,163,184,.06); }
+    .records-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+    @media (max-width:760px) {
+      .result, .inline, .searchbar { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div>
+        <h1>Dryer Settings App</h1>
+        <p>Find dryer temperatures by product and line speed. Edit existing records or add new ones.</p>
+      </div>
+      <div class="card" style="margin-bottom:0; min-width:300px;">
+        <div class="mode-box">
+          <button id="viewModeBtn" class="secondary">View mode</button>
+          <input id="passwordInput" type="password" placeholder="Enter password" style="max-width:220px;">
+          <button id="unlockBtn">Unlock</button>
+          <button id="lockBtn" class="secondary" style="display:none;">Lock</button>
+        </div>
+        <div id="modeStatus" class="muted" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Lookup</h2>
+        <label for="productSelect">Product</label>
+        <select id="productSelect"></select>
+        <label for="lineSpeedSelect">Line speed</label>
+        <select id="lineSpeedSelect"></select>
+        <div class="btn-row">
+          <button id="lookupBtn">Get settings</button>
+          <button id="resetBtn" class="secondary">Reset data</button>
+        </div>
+        <div id="lookupMeta" class="muted" style="margin-top:12px;"></div>
+        <div id="result" class="result"></div>
+      </section>
+
+      <section class="card admin-only">
+        <h2>Add or update record</h2>
+        <div class="inline">
+          <select id="newProductSelect"></select>
+          <input id="newProductCustom" placeholder="New product name" style="display:none;">
+          <input id="newSpeed" type="number" step="0.1" placeholder="Line speed">
+          <input id="newZone1" type="number" step="0.1" placeholder="Zone 1">
+          <input id="newZone2" type="number" step="0.1" placeholder="Zone 2">
+          <input id="newZone3" type="number" step="0.1" placeholder="Zone 3">
+          <button id="saveRecordBtn">Save</button>
+        </div>
+        <p class="muted">Choose an existing product or select Add new product. If the product and speed already exist, Save updates that row.</p>
+        <div class="btn-row">
+          <button id="exportBtn" class="secondary">Export JSON</button>
+          <label class="secondary" style="display:block;padding:0;border:none;background:none;">
+            <input id="importFile" type="file" accept="application/json">
+          </label>
+        </div>
+      </section>
+    </div>
+
+    <section class="card admin-only">
+      <h2>Records</h2>
+      <div class="searchbar">
+        <input id="filterText" placeholder="Filter by product">
+        <select id="sortSelect">
+          <option value="product">Sort by product</option>
+          <option value="speed">Sort by speed</option>
+        </select>
+      </div>
+      <div class="records-head">
+        <div id="recordCount" class="muted"></div>
+        <div class="muted">The records list now expands with the page instead of using an inner scroll box.</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Speed</th>
+              <th>Zone 1</th>
+              <th>Zone 2</th>
+              <th>Zone 3</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="recordsBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const INITIAL_DATA = [{"product": "1/2 ARB", "lineSpeed": 136.0, "zone1": 315, "zone2": 315, "zone3": 150}, {"product": "1/2 ARB", "lineSpeed": 144.0, "zone1": 295, "zone2": 290, "zone3": 155}, {"product": "1/2 EASILITE", "lineSpeed": 152.0, "zone1": 255, "zone2": 245, "zone3": 125}, {"product": "1/2 EASILITE", "lineSpeed": 161.0, "zone1": 285, "zone2": 275, "zone3": 130}, {"product": "1/2 EASILITE", "lineSpeed": 175.0, "zone1": 295, "zone2": 285, "zone3": 150}, {"product": "1/2 EASILITE", "lineSpeed": 185.0, "zone1": 305, "zone2": 295, "zone3": 140}, {"product": "1/2 EASILITE", "lineSpeed": 188.0, "zone1": 300, "zone2": 300, "zone3": 150}, {"product": "1/2 EASILITE", "lineSpeed": 190.0, "zone1": 305, "zone2": 300, "zone3": 145}, {"product": "1/2 GLASSROC", "lineSpeed": 126.0, "zone1": 255, "zone2": 245, "zone3": 120}, {"product": "1/2 GLASSROC", "lineSpeed": 136.0, "zone1": 270, "zone2": 265, "zone3": 155}, {"product": "1/2 GLASSROC", "lineSpeed": 144.0, "zone1": 280, "zone2": 280, "zone3": 140}, {"product": "1/2 GLASSROC", "lineSpeed": 146.0, "zone1": 295, "zone2": 290, "zone3": 165}, {"product": "1/2 IC", "lineSpeed": 152.0, "zone1": 270, "zone2": 260, "zone3": 140}, {"product": "1/2 IC", "lineSpeed": 155.0, "zone1": 280, "zone2": 275, "zone3": 135}, {"product": "1/2 IC", "lineSpeed": 157.0, "zone1": 280, "zone2": 270, "zone3": 130}, {"product": "1/2 IC", "lineSpeed": 175.0, "zone1": 305, "zone2": 295, "zone3": 140}, {"product": "1/2 IC", "lineSpeed": 185.0, "zone1": 320, "zone2": 315, "zone3": 150}, {"product": "1/2 IC", "lineSpeed": 187.0, "zone1": 310, "zone2": 310, "zone3": 150}, {"product": "1/2 IC", "lineSpeed": 188.0, "zone1": 315, "zone2": 315, "zone3": 145}, {"product": "1/2 IC", "lineSpeed": 190.0, "zone1": 320, "zone2": 315, "zone3": 155}, {"product": "1/2 M2TECH", "lineSpeed": 152.0, "zone1": 285, "zone2": 275, "zone3": 140}, {"product": "1/2 M2TECH", "lineSpeed": 175.0, "zone1": 295, "zone2": 295, "zone3": 145}, {"product": "1/2 M2TECH", "lineSpeed": 185.0, "zone1": 315, "zone2": 315, "zone3": 170}, {"product": "1/2 M2TECH", "lineSpeed": 188.0, "zone1": 320, "zone2": 320, "zone3": 160}, {"product": "1/2 TYPE C", "lineSpeed": 126.0, "zone1": 271, "zone2": 261, "zone3": 140}, {"product": "1/2 TYPE C", "lineSpeed": 152.0, "zone1": 315, "zone2": 315, "zone3": 155}, {"product": "1/2 TYPE C", "lineSpeed": 155.0, "zone1": 320, "zone2": 320, "zone3": 145}, {"product": "1/2 TYPE C", "lineSpeed": 157.0, "zone1": 325, "zone2": 325, "zone3": 140}, {"product": "1/2 TYPE C", "lineSpeed": 175.0, "zone1": 350, "zone2": 345, "zone3": 150}, {"product": "5/8 ARB", "lineSpeed": 126.0, "zone1": 350, "zone2": 345, "zone3": 170}, {"product": "5/8 FIRELITE", "lineSpeed": 120.0, "zone1": 285, "zone2": 285, "zone3": 130}, {"product": "5/8 FIRELITE", "lineSpeed": 126.0, "zone1": 295, "zone2": 285, "zone3": 140}, {"product": "5/8 GLASSROC", "lineSpeed": 126.0, "zone1": 335, "zone2": 325, "zone3": 150}, {"product": "5/8 GLASSROC", "lineSpeed": 131.0, "zone1": 318, "zone2": 315, "zone3": 140}, {"product": "5/8 GLASSROC", "lineSpeed": 136.0, "zone1": 345, "zone2": 345, "zone3": 140}, {"product": "5/8 GLASSROC", "lineSpeed": 144.0, "zone1": 355, "zone2": 350, "zone3": 170}, {"product": "5/8 GLASSROC", "lineSpeed": 146.0, "zone1": 360, "zone2": 360, "zone3": 162}, {"product": "5/8 INT. ROBUST", "lineSpeed": 120.0, "zone1": 350, "zone2": 350, "zone3": 150}, {"product": "5/8 M2TECH", "lineSpeed": 126.0, "zone1": 310, "zone2": 305, "zone3": 150}, {"product": "5/8 M2TECH", "lineSpeed": 136.0, "zone1": 340, "zone2": 335, "zone3": 145}, {"product": "5/8 M2TECH", "lineSpeed": 144.0, "zone1": 340, "zone2": 330, "zone3": 145}, {"product": "5/8 M2TECH", "lineSpeed": 146.0, "zone1": 335, "zone2": 333, "zone3": 181}, {"product": "5/8 M2TECH", "lineSpeed": 152.0, "zone1": 355, "zone2": 345, "zone3": 140}, {"product": "5/8 M2TECH", "lineSpeed": 155.0, "zone1": 345, "zone2": 345, "zone3": 170}, {"product": "5/8 M2TECH", "lineSpeed": 157.0, "zone1": 350, "zone2": 340, "zone3": 165}, {"product": "5/8 TYPE X", "lineSpeed": 126.0, "zone1": 325, "zone2": 315, "zone3": 150}, {"product": "5/8 TYPE X", "lineSpeed": 131.0, "zone1": 305, "zone2": 295, "zone3": 145}, {"product": "5/8 TYPE X", "lineSpeed": 136.0, "zone1": 305, "zone2": 300, "zone3": 140}, {"product": "5/8 TYPE X", "lineSpeed": 144.0, "zone1": 340, "zone2": 335, "zone3": 165}, {"product": "5/8 TYPE X", "lineSpeed": 152.0, "zone1": 350, "zone2": 340, "zone3": 160}, {"product": "5/8 TYPE X", "lineSpeed": 155.0, "zone1": 355, "zone2": 350, "zone3": 160}, {"product": "5/8 TYPE X", "lineSpeed": 157.0, "zone1": 350, "zone2": 348, "zone3": 165}];
+    const STORAGE_KEY = 'dryer-settings-app-data-v2';
+
+    const productSelect = document.getElementById('productSelect');
+    const lineSpeedSelect = document.getElementById('lineSpeedSelect');
+    const result = document.getElementById('result');
+    const lookupMeta = document.getElementById('lookupMeta');
+    const recordsBody = document.getElementById('recordsBody');
+    const recordCount = document.getElementById('recordCount');
+    const filterText = document.getElementById('filterText');
+    const sortSelect = document.getElementById('sortSelect');
+    const newProductSelect = document.getElementById('newProductSelect');
+    const DEFAULT_PASSWORD = 'dryer123';
+    const UNLOCK_KEY = 'dryer-settings-app-unlocked-v1';
+    const modeStatus = document.getElementById('modeStatus');
+    const lockBtn = document.getElementById('lockBtn');
+    const adminSections = Array.from(document.querySelectorAll('.admin-only'));
+    const passwordInput = document.getElementById('passwordInput');
+    const newProductCustom = document.getElementById('newProductCustom');
+    const newSpeed = document.getElementById('newSpeed');
+    const newZone1 = document.getElementById('newZone1');
+    const newZone2 = document.getElementById('newZone2');
+    const newZone3 = document.getElementById('newZone3');
+
+    function round1(n) { return Math.round(n * 10) / 10; }
+    function isUnlocked() { return sessionStorage.getItem(UNLOCK_KEY) === 'yes'; }
+    function setUnlocked(value) {
+      if (value) sessionStorage.setItem(UNLOCK_KEY, 'yes');
+      else sessionStorage.removeItem(UNLOCK_KEY);
+      applyMode();
+    }
+    function applyMode() {
+      const unlocked = isUnlocked();
+      for (const section of adminSections) section.style.display = unlocked ? '' : 'none';
+      lockBtn.style.display = unlocked ? '' : 'none';
+      passwordInput.style.display = unlocked ? 'none' : '';
+      if (unlocked) passwordInput.value = '';
+      modeStatus.textContent = unlocked ? 'Unlocked mode: lookup, records, and editing are visible.' : 'View mode: only lookup is visible. Enter the password and click Unlock.';
+    }
+    function num(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
+    function cleanProduct(v) { return String(v || '').trim(); }
+    function keyOf(r) { return cleanProduct(r.product).toLowerCase() + '__' + Number(r.lineSpeed); }
+    function clone(obj) { return JSON.parse(JSON.stringify(obj)); }
+
+    function loadData() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (e) {}
+      return clone(INITIAL_DATA);
+    }
+
+    let data = loadData();
+
+    function saveData() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function populateProducts() {
+      const products = Array.from(new Set(data.map(r => cleanProduct(r.product)).filter(Boolean))).sort((a,b) => a.localeCompare(b));
+      const current = productSelect.value;
+      let html = '';
+      for (const p of products) html += '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>';
+      productSelect.innerHTML = html;
+      if (products.includes(current)) productSelect.value = current;
+      else if (products.length) productSelect.value = products[0];
+      populateNewProductOptions();
+    }
+
+    function populateNewProductOptions() {
+      const products = Array.from(new Set(data.map(r => cleanProduct(r.product)).filter(Boolean))).sort((a,b) => a.localeCompare(b));
+      const current = newProductSelect.value;
+      let html = '<option value="">Select product</option>' +
+                 '<option value="__NEW__">Add new product</option>';
+      for (const p of products) html += '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>';
+      newProductSelect.innerHTML = html;
+      if (current && (products.includes(current) || current === '__NEW__')) newProductSelect.value = current;
+      toggleNewProductInput();
+    }
+
+    function toggleNewProductInput() {
+      const show = newProductSelect.value === '__NEW__';
+      newProductCustom.style.display = show ? '' : 'none';
+      if (!show) newProductCustom.value = '';
+    }
+
+    function getProductRows(product) {
+      return data.filter(r => cleanProduct(r.product) === cleanProduct(product)).sort((a,b) => Number(a.lineSpeed) - Number(b.lineSpeed));
+    }
+
+    function populateSpeeds() {
+      const product = productSelect.value;
+      const rows = getProductRows(product);
+      const speeds = Array.from(new Set(rows.map(r => Number(r.lineSpeed)))).sort((a,b) => a - b);
+      const current = lineSpeedSelect.value;
+      let html = '';
+      for (const s of speeds) html += '<option value="' + s + '">' + s + '</option>';
+      lineSpeedSelect.innerHTML = html;
+      if (speeds.map(String).includes(current)) lineSpeedSelect.value = current;
+      else if (speeds.length) lineSpeedSelect.value = String(speeds[0]);
+    }
+
+    function interpolate(a, b, target) {
+      const ratio = (target - a.lineSpeed) / (b.lineSpeed - a.lineSpeed);
+      return {
+        zone1: round1(a.zone1 + (b.zone1 - a.zone1) * ratio),
+        zone2: round1(a.zone2 + (b.zone2 - a.zone2) * ratio),
+        zone3: round1(a.zone3 + (b.zone3 - a.zone3) * ratio)
+      };
+    }
+
+    function findSettings(product, speed) {
+      const rows = getProductRows(product);
+      if (!rows.length || speed == null) return null;
+      const exact = rows.find(r => Number(r.lineSpeed) === Number(speed));
+      if (exact) return { type: 'exact', row: exact };
+      let lower = null, upper = null;
+      for (const row of rows) {
+        const s = Number(row.lineSpeed);
+        if (s < speed) lower = row;
+        if (s > speed) { upper = row; break; }
+      }
+      if (lower && upper) return { type: 'estimate', row: Object.assign({ product: product, lineSpeed: speed }, interpolate(lower, upper, speed)), bounds: [lower, upper] };
+      const nearest = rows.reduce((best, r) => Math.abs(r.lineSpeed - speed) < Math.abs(best.lineSpeed - speed) ? r : best, rows[0]);
+      return { type: 'nearest', row: nearest };
+    }
+
+    function zoneCard(name, value) {
+      return '<div class="zone"><div class="name">' + name + '</div><div class="val">' + value + '</div></div>';
+    }
+
+    function doLookup() {
+      const product = productSelect.value;
+      const speed = num(lineSpeedSelect.value);
+      if (!product || speed == null) {
+        lookupMeta.textContent = 'Select a product and enter a line speed.';
+        result.innerHTML = '';
+        return;
+      }
+      const found = findSettings(product, speed);
+      if (!found) {
+        lookupMeta.textContent = 'No settings found for that product.';
+        result.innerHTML = '';
+        return;
+      }
+      const row = found.row;
+      result.innerHTML = zoneCard('Zone 1', row.zone1) + zoneCard('Zone 2', row.zone2) + zoneCard('Zone 3', row.zone3);
+      if (found.type === 'exact') {
+        lookupMeta.innerHTML = 'Exact match for <strong>' + escapeHtml(product) + '</strong> at speed <strong>' + row.lineSpeed + '</strong>. <span class="tag exact">Exact</span>';
+      } else if (found.type === 'estimate') {
+        lookupMeta.innerHTML = 'Estimated from speeds <strong>' + found.bounds[0].lineSpeed + '</strong> and <strong>' + found.bounds[1].lineSpeed + '</strong>. <span class="tag estimate">Interpolated</span>';
+      } else {
+        lookupMeta.innerHTML = 'No exact bracket found. Showing nearest saved speed <strong>' + row.lineSpeed + '</strong>. <span class="tag estimate">Nearest</span>';
+      }
+    }
+
+    function renderTable() {
+      const q = filterText.value.trim().toLowerCase();
+      const sortBy = sortSelect.value;
+      const rows = data.filter(r => !q || cleanProduct(r.product).toLowerCase().includes(q)).sort((a,b) => sortBy === 'speed' ? (a.lineSpeed - b.lineSpeed) || a.product.localeCompare(b.product) : a.product.localeCompare(b.product) || a.lineSpeed - b.lineSpeed);
+      let html = '';
+      for (const r of rows) {
+        html += '<tr>' +
+          '<td><input data-field="product" data-product="' + escapeHtml(r.product) + '" data-speed="' + r.lineSpeed + '" value="' + escapeHtml(r.product) + '"></td>' +
+          '<td><input data-field="lineSpeed" data-product="' + escapeHtml(r.product) + '" data-speed="' + r.lineSpeed + '" type="number" step="0.1" value="' + r.lineSpeed + '"></td>' +
+          '<td><input data-field="zone1" data-product="' + escapeHtml(r.product) + '" data-speed="' + r.lineSpeed + '" type="number" step="0.1" value="' + r.zone1 + '"></td>' +
+          '<td><input data-field="zone2" data-product="' + escapeHtml(r.product) + '" data-speed="' + r.lineSpeed + '" type="number" step="0.1" value="' + r.zone2 + '"></td>' +
+          '<td><input data-field="zone3" data-product="' + escapeHtml(r.product) + '" data-speed="' + r.lineSpeed + '" type="number" step="0.1" value="' + r.zone3 + '"></td>' +
+          '<td><button class="secondary save-inline" data-product="' + escapeHtml(r.product) + '" data-speed="' + r.lineSpeed + '">Save</button> <button class="danger delete-inline" data-product="' + escapeHtml(r.product) + '" data-speed="' + r.lineSpeed + '">Delete</button></td>' +
+          '</tr>';
+      }
+      recordCount.textContent = rows.length + ' record' + (rows.length === 1 ? '' : 's') + ' shown';
+      recordsBody.innerHTML = html;
+    }
+
+    function upsertRecord() {
+      const chosenProduct = newProductSelect.value === '__NEW__' ? cleanProduct(newProductCustom.value) : cleanProduct(newProductSelect.value);
+      const record = {
+        product: chosenProduct,
+        lineSpeed: num(newSpeed.value),
+        zone1: num(newZone1.value),
+        zone2: num(newZone2.value),
+        zone3: num(newZone3.value)
+      };
+      if (!record.product || [record.lineSpeed, record.zone1, record.zone2, record.zone3].some(v => v == null)) {
+        alert('Enter product, line speed, and all three zone temperatures.');
+        return;
+      }
+      const idx = data.findIndex(r => keyOf(r) === keyOf(record));
+      if (idx >= 0) data[idx] = record; else data.push(record);
+      data.sort((a,b) => a.product.localeCompare(b.product) || a.lineSpeed - b.lineSpeed);
+      saveData();
+      populateProducts();
+      renderTable();
+      productSelect.value = record.product;
+      populateSpeeds();
+      lineSpeedSelect.value = String(record.lineSpeed);
+      doLookup();
+      newProductSelect.value = '';
+      newProductCustom.value = '';
+      toggleNewProductInput();
+      newSpeed.value = '';
+      newZone1.value = '';
+      newZone2.value = '';
+      newZone3.value = '';
+    }
+
+    function saveInline(product, speed) {
+      const selector = '[data-product="' + CSS.escape(product) + '"][data-speed="' + speed + '"]';
+      const inputs = Array.from(document.querySelectorAll(selector));
+      if (!inputs.length) return;
+      const draft = { product: product, lineSpeed: Number(speed) };
+      for (const input of inputs) {
+        const field = input.dataset.field;
+        draft[field] = field === 'product' ? cleanProduct(input.value) : num(input.value);
+      }
+      if (!draft.product || [draft.lineSpeed, draft.zone1, draft.zone2, draft.zone3].some(v => v == null)) {
+        alert('All values are required.');
+        return;
+      }
+      data = data.filter(r => !(cleanProduct(r.product) === cleanProduct(product) && Number(r.lineSpeed) === Number(speed)));
+      const idx = data.findIndex(r => keyOf(r) === keyOf(draft));
+      if (idx >= 0) data[idx] = draft; else data.push(draft);
+      data.sort((a,b) => a.product.localeCompare(b.product) || a.lineSpeed - b.lineSpeed);
+      saveData();
+      populateProducts();
+      populateSpeeds();
+      renderTable();
+      doLookup();
+    }
+
+    function deleteRecord(product, speed) {
+      if (!confirm('Delete ' + product + ' at speed ' + speed + '?')) return;
+      data = data.filter(r => !(cleanProduct(r.product) === cleanProduct(product) && Number(r.lineSpeed) === Number(speed)));
+      saveData();
+      populateProducts();
+      populateSpeeds();
+      renderTable();
+      doLookup();
+    }
+
+    function exportJson() {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'dryer-settings-data.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importJson(file) {
+      const reader = new FileReader();
+      reader.onload = function() {
+        try {
+          const parsed = JSON.parse(reader.result);
+          if (!Array.isArray(parsed)) throw new Error('Invalid file');
+          data = parsed.map(r => ({
+            product: cleanProduct(r.product),
+            lineSpeed: num(r.lineSpeed),
+            zone1: num(r.zone1),
+            zone2: num(r.zone2),
+            zone3: num(r.zone3)
+          })).filter(r => r.product && [r.lineSpeed, r.zone1, r.zone2, r.zone3].every(v => v != null));
+          saveData();
+          populateProducts();
+          populateSpeeds();
+          renderTable();
+          doLookup();
+        } catch (e) {
+          alert('Could not import JSON file.');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function tryUnlock() {
+      const entered = String(passwordInput.value || '');
+      if (!entered) {
+        modeStatus.textContent = 'Enter a password to unlock editing and records.';
+        passwordInput.focus();
+        return;
+      }
+      if (entered === DEFAULT_PASSWORD) {
+        setUnlocked(true);
+      } else {
+        modeStatus.textContent = 'Incorrect password. Try again.';
+        passwordInput.focus();
+        passwordInput.select();
+      }
+    }
+
+    document.getElementById('lookupBtn').addEventListener('click', doLookup);
+    document.getElementById('viewModeBtn').addEventListener('click', function() { setUnlocked(false); });
+    document.getElementById('unlockBtn').addEventListener('click', tryUnlock);
+    passwordInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') tryUnlock(); });
+    document.getElementById('lockBtn').addEventListener('click', function() { setUnlocked(false); });
+    document.getElementById('saveRecordBtn').addEventListener('click', upsertRecord);
+    newProductSelect.addEventListener('change', toggleNewProductInput);
+    document.getElementById('exportBtn').addEventListener('click', exportJson);
+    document.getElementById('resetBtn').addEventListener('click', function() {
+      if (!confirm('Reset all edits and restore the original imported data?')) return;
+      data = clone(INITIAL_DATA);
+      saveData();
+      populateProducts();
+      populateSpeeds();
+      renderTable();
+      doLookup();
+    });
+    filterText.addEventListener('input', renderTable);
+    sortSelect.addEventListener('change', renderTable);
+    productSelect.addEventListener('change', function() { populateSpeeds(); doLookup(); });
+    lineSpeedSelect.addEventListener('change', doLookup);
+    document.getElementById('importFile').addEventListener('change', function(e) {
+      const file = e.target.files && e.target.files[0];
+      if (file) importJson(file);
+      e.target.value = '';
+    });
+    recordsBody.addEventListener('click', function(e) {
+      const saveBtn = e.target.closest('.save-inline');
+      const deleteBtn = e.target.closest('.delete-inline');
+      if (saveBtn) saveInline(saveBtn.dataset.product, saveBtn.dataset.speed);
+      if (deleteBtn) deleteRecord(deleteBtn.dataset.product, deleteBtn.dataset.speed);
+    });
+
+    populateProducts();
+    populateSpeeds();
+    renderTable();
+    applyMode();
+    doLookup();
+  </script>
+</body>
+</html>
